@@ -1,0 +1,9 @@
+
+/* Styles de base partagés par toute l'application */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
