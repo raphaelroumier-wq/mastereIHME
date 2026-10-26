@@ -1,34 +1,33 @@
 
+import { useEffect, useState } from 'react';
 import './App.css';
 
-const velos = [
-  {
-    id: 1,
-    nom: 'Vélo de ville',
-    type: 'Ville',
-    description: 'Idéal pour les déplacements quotidiens et les balades.',
-    tarif: 12,
-    emoji: '🚲',
-  },
-  {
-    id: 2,
-    nom: 'Vélo électrique',
-    type: 'Électrique',
-    description: 'Profite de l’assistance électrique pour aller plus loin.',
-    tarif: 25,
-    emoji: '⚡',
-  },
-  {
-    id: 3,
-    nom: 'VTT',
-    type: 'Sport',
-    description: 'Parfait pour les chemins et les aventures en nature.',
-    tarif: 18,
-    emoji: '⛰️',
-  },
-];
-
 function App() {
+  const [velos, setVelos] = useState([]);
+  const [chargement, setChargement] = useState(true);
+  const [erreur, setErreur] = useState('');
+
+  useEffect(() => {
+    async function recupererVelos() {
+      try {
+        const reponse = await fetch('/api/velos');
+
+        if (!reponse.ok) {
+          throw new Error('Impossible de récupérer les vélos.');
+        }
+
+        const donnees = await reponse.json();
+        setVelos(donnees);
+      } catch (erreur) {
+        setErreur('Impossible de charger les vélos. Vérifie que le serveur Express fonctionne.');
+      } finally {
+        setChargement(false);
+      }
+    }
+
+    recupererVelos();
+  }, []);
+
   return (
     <div className="application">
       <header className="entete">
@@ -62,35 +61,52 @@ function App() {
             <p>Choisissez le vélo adapté à vos envies.</p>
           </div>
 
-          <div className="grille-velos">
-            {velos.map((velo) => (
-              <article className="carte-velo" key={velo.id}>
-                <div className="illustration-velo" aria-hidden="true">
-                  {velo.emoji}
-                </div>
+          {chargement && <p>Chargement des vélos...</p>}
 
-                <div className="contenu-carte">
-                  <span className="etiquette">{velo.type}</span>
-                  <h3>{velo.nom}</h3>
-                  <p className="description">{velo.description}</p>
+          {!chargement && erreur && <p role="alert">{erreur}</p>}
 
-                  <div className="bas-carte">
-                    <p className="tarif">
-                      {velo.tarif} € <span>/ jour</span>
-                    </p>
-                    <button
-                      className="bouton"
-                      onClick={() =>
-                        alert(`Tu as choisi : ${velo.nom}`)
-                      }
-                    >
-                      Choisir ce vélo
-                    </button>
+          {!chargement && !erreur && velos.length === 0 && (
+            <p>Aucun vélo disponible pour le moment.</p>
+          )}
+
+          {!chargement && !erreur && velos.length > 0 && (
+            <div className="grille-velos">
+              {velos.map((velo) => (
+                <article className="carte-velo" key={velo.id}>
+                  <div className="illustration-velo" aria-hidden="true">
+                    {velo.type === 'Ville'
+                      ? '🚲'
+                      : velo.type === 'Électrique'
+                        ? '⚡'
+                        : '⛰️'}
                   </div>
-                </div>
-              </article>
-            ))}
-          </div>
+
+                  <div className="contenu-carte">
+                    <span className="etiquette">{velo.type}</span>
+                    <h3>{velo.nom}</h3>
+                    <p className="description">
+                      {velo.description ||
+                        'Découvrez ce vélo pour votre prochaine sortie.'}
+                    </p>
+
+                    <div className="bas-carte">
+                      <p className="tarif">
+                        {velo.tarif} € <span>/ jour</span>
+                      </p>
+                      <button
+                        className="bouton"
+                        onClick={() =>
+                          alert(`Tu as choisi : ${velo.nom}`)
+                        }
+                      >
+                        Choisir ce vélo
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="fonctionnement" id="fonctionnement">
