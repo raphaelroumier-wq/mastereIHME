@@ -8,7 +8,9 @@ Application de démonstration de réservation de vélos réalisée avec React, E
 - Création de compte et connexion avec mots de passe hachés via `scrypt`.
 - Session conservée dans un cookie HTTP-only, SameSite=Lax, d’une durée de sept jours.
 - Consultation des créneaux libres par vélo et par date, de 9 h à 18 h.
+- Flotte de dix vélos par modèle (ville, électrique, route et VTT) avec le stock restant affiché pour chaque heure.
 - Réservation par heures pleines, pour une durée d’une heure minimum.
+- Chaque réservation consomme un vélo ; le serveur contrôle le stock sur toutes les heures du créneau et bloque les sur-réservations concurrentes.
 - Prévention des conflits de réservation côté serveur, y compris lorsque plusieurs demandes arrivent simultanément.
 - Calcul du prix au prorata d’un tarif journalier de neuf heures.
 - Espace personnel pour consulter et annuler ses réservations futures.
@@ -68,7 +70,7 @@ Les données sont échangées en JSON. Les erreurs sont renvoyées dans la propr
 | Méthode | Route | Accès | Rôle |
 |---|---|---|---|
 | `GET` | `/api/velos` | Public | Liste les vélos ; accepte `type` et `budget` en paramètres de requête |
-| `GET` | `/api/velos/:id/disponibilites?date=AAAA-MM-JJ` | Public | Renvoie les créneaux horaires et leur disponibilité |
+| `GET` | `/api/velos/:id/disponibilites?date=AAAA-MM-JJ` | Public | Renvoie le stock total et le nombre de vélos restants pour chaque créneau horaire |
 | `POST` | `/api/inscription` | Public | Crée un compte (`nom`, `email`, `motDePasse`) et ouvre une session |
 | `POST` | `/api/connexion` | Public | Ouvre une session (`email`, `motDePasse`) |
 | `POST` | `/api/deconnexion` | Session | Ferme la session |
@@ -97,7 +99,7 @@ Le proxy du serveur retire le préfixe public avant de transmettre les requêtes
 
 ## Base de données
 
-Le schéma est défini dans `backend/schema.sql`. Il contient les tables `velos`, `utilisateurs`, `sessions` et `reservations`. Les tarifs `tarif` sont journaliers pour une journée de neuf heures ; le prix d’une location plus courte est calculé ainsi :
+Le schéma est défini dans `backend/schema.sql`. Il contient les tables `velos`, `utilisateurs`, `sessions` et `reservations`. Chaque modèle de vélo possède un stock initial de dix unités, ajouté par une migration idempotente. Une réservation porte sur une unité ; la disponibilité d’un créneau correspond au stock du modèle moins les réservations confirmées qui chevauchent cette heure. Les tarifs `tarif` sont journaliers pour une journée de neuf heures ; le prix d’une location plus courte est calculé ainsi :
 
 ```text
 prix = tarif journalier × nombre d’heures / 9

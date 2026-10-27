@@ -38,4 +38,41 @@ function validateReservation(input) {
   return { valid: true, veloId, date, heureDebut, heureFin };
 }
 
-module.exports = { isValidDate, validateReservation };
+function buildAvailabilitySlots(stock, reservations, date, now = new Date()) {
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const currentHour = now.getHours();
+
+  return Array.from({ length: 9 }, (_, index) => {
+    const start = 9 + index;
+    const end = start + 1;
+    const heure = `${String(start).padStart(2, '0')}:00`;
+    const reserved = reservations.reduce((count, reservation) => {
+      const reservationStart = Number(String(reservation.heure_debut).slice(0, 2));
+      const reservationEnd = Number(String(reservation.heure_fin).slice(0, 2));
+      return count + (start < reservationEnd && end > reservationStart ? 1 : 0);
+    }, 0);
+    const restants = Math.max(0, stock - reserved);
+    const past = date < today || (date === today && start <= currentHour);
+
+    return { heure, restants, disponible: !past && restants > 0 };
+  });
+}
+
+function hasCapacity(stock, reservations, heureDebut, heureFin) {
+  const start = Number(heureDebut.slice(0, 2));
+  const end = Number(heureFin.slice(0, 2));
+
+  for (let hour = start; hour < end; hour += 1) {
+    const overlapping = reservations.reduce((count, reservation) => {
+      const reservationStart = Number(String(reservation.heure_debut).slice(0, 2));
+      const reservationEnd = Number(String(reservation.heure_fin).slice(0, 2));
+      return count + (hour < reservationEnd && hour + 1 > reservationStart ? 1 : 0);
+    }, 0);
+    if (overlapping >= stock) {
+      return false;
+    }
+  }
+  return true;
+}
+
+module.exports = { buildAvailabilitySlots, hasCapacity, isValidDate, validateReservation };

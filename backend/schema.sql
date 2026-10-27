@@ -3,10 +3,12 @@ CREATE TABLE IF NOT EXISTS velos (
   nom TEXT NOT NULL,
   type TEXT NOT NULL,
   tarif NUMERIC(8, 2) NOT NULL CHECK (tarif >= 0),
+  stock INTEGER NOT NULL DEFAULT 10 CHECK (stock >= 0),
   description TEXT
 );
 
 ALTER TABLE velos ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE velos ADD COLUMN IF NOT EXISTS stock INTEGER NOT NULL DEFAULT 10 CHECK (stock >= 0);
 
 INSERT INTO velos (nom, type, tarif, description)
 SELECT 'Vélo de ville', 'Ville', 12, 'Le compagnon idéal pour vos trajets et balades urbaines.'
@@ -24,6 +26,15 @@ WHERE nom = 'VTT tout terrain';
 INSERT INTO velos (nom, type, tarif, description)
 SELECT 'Vélo de route', 'Sport', 18, 'Prenez la route et avalez les kilomètres avec légèreté.'
 WHERE NOT EXISTS (SELECT 1 FROM velos WHERE nom = 'Vélo de route');
+
+UPDATE velos
+SET type = 'Sport',
+    description = COALESCE(description, 'Explorez les chemins et les sentiers avec ce VTT robuste.')
+WHERE nom = 'VTT';
+
+INSERT INTO velos (nom, type, tarif, stock, description)
+SELECT 'VTT', 'Sport', 18, 10, 'Explorez les chemins et les sentiers avec ce VTT robuste.'
+WHERE NOT EXISTS (SELECT 1 FROM velos WHERE nom = 'VTT');
 
 CREATE TABLE IF NOT EXISTS utilisateurs (
   id SERIAL PRIMARY KEY,

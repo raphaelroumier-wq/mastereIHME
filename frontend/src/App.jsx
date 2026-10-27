@@ -144,6 +144,15 @@ function App() {
         .every((creneau) => creneau.disponible))
     : [];
   const duree = debut && fin ? Number(fin.slice(0, 2)) - Number(debut.slice(0, 2)) : 0;
+  const creneauxSelectionnes = debut && fin
+    ? creneaux.filter((creneau) => {
+      const heure = Number(creneau.heure.slice(0, 2));
+      return heure >= debutHeure && heure < Number(fin.slice(0, 2));
+    })
+    : [];
+  const velosRestantsCreneau = creneauxSelectionnes.length
+    ? Math.min(...creneauxSelectionnes.map((creneau) => creneau.restants))
+    : null;
   const prixEstime = veloSelectionne && duree
     ? (Number(veloSelectionne.tarif) * duree) / 9
     : 0;
@@ -217,7 +226,7 @@ function App() {
       await chargerReservations();
     } catch (error) {
       setMessage(error.message);
-      if (error.message.includes('vient d’être réservé')) {
+      if (error.message.includes('ne reste plus de vélo disponible')) {
         const data = await api(`/api/velos/${veloSelectionne.id}/disponibilites?date=${date}`);
         setCreneaux(data.slots);
       }
@@ -413,17 +422,18 @@ function App() {
                 <div className="horaires-disponibles">
                   <div className="titre-horaires">
                     <strong>Horaires disponibles</strong>
-                    <span>De 9 h à 18 h</span>
+                    <span>{veloSelectionne.stock} vélos · de 9 h à 18 h</span>
                   </div>
                   {chargementCreneaux ? <p>Recherche des disponibilités...</p> : (
                     <div className="liste-creneaux">
                       {creneaux.map((creneau) => (
                         <span
-                          className={`creneau ${creneau.disponible ? 'disponible' : 'indisponible'}`}
+                          className={`creneau ${creneau.disponible ? 'disponible' : 'indisponible'} ${creneau.restants === 0 ? 'epuise' : ''}`}
                           key={creneau.heure}
-                          title={creneau.disponible ? `${creneau.heure} disponible` : `${creneau.heure} indisponible`}
+                          title={`${creneau.heure} — ${creneau.restants} vélo${creneau.restants !== 1 ? 's' : ''} restant${creneau.restants !== 1 ? 's' : ''}`}
                         >
-                          {creneau.heure}
+                          <span className="creneau-heure">{creneau.heure}</span>
+                          <span className="creneau-stock">{creneau.restants} restant{creneau.restants !== 1 ? 's' : ''}</span>
                         </span>
                       ))}
                     </div>
@@ -438,7 +448,9 @@ function App() {
                     <select required value={debut} onChange={(event) => { setDebut(event.target.value); setFin(''); }}>
                       <option value="">Choisir</option>
                       {creneaux.filter((slot) => slot.disponible).map((slot) => (
-                        <option key={slot.heure} value={slot.heure}>{slot.heure}</option>
+                        <option key={slot.heure} value={slot.heure}>
+                          {slot.heure} — {slot.restants} restant{slot.restants !== 1 ? 's' : ''}
+                        </option>
                       ))}
                     </select>
                   </label>
@@ -456,7 +468,14 @@ function App() {
                 </div>
                 {duree > 0 && (
                   <div className="resume-prix">
-                    <span>{duree} heure{duree > 1 ? 's' : ''} · {formatPrice(veloSelectionne.tarif)} / 9 h</span>
+                    <div className="resume-prix-details">
+                      <span>{duree} heure{duree > 1 ? 's' : ''} · {formatPrice(veloSelectionne.tarif)} / 9 h</span>
+                      {velosRestantsCreneau !== null && (
+                        <span className="reste-creneau">
+                          {velosRestantsCreneau} vélo{velosRestantsCreneau !== 1 ? 's' : ''} disponible{velosRestantsCreneau !== 1 ? 's' : ''} sur tout le créneau
+                        </span>
+                      )}
+                    </div>
                     <strong>{formatPrice(prixEstime)}</strong>
                   </div>
                 )}

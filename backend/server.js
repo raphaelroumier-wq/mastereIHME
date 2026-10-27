@@ -5,7 +5,12 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const express = require('express');
 const { Pool } = require('pg');
-const { isValidDate, validateReservation } = require('./reservationRules');
+const {
+  buildAvailabilitySlots,
+  hasCapacity,
+  isValidDate,
+  validateReservation,
+} = require('./reservationRules');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -109,6 +114,7 @@ function publicBike(row) {
     nom: row.nom,
     type: row.type,
     tarif: Number(row.tarif),
+    stock: row.stock,
     description: row.description,
   };
 }
@@ -133,7 +139,7 @@ app.get('/api/velos', async (request, response, next) => {
     }
 
     const result = await pool.query(
-      `SELECT id, nom, type, tarif, description
+      `SELECT id, nom, type, tarif, stock, description
        FROM velos ${filters.length ? `WHERE ${filters.join(' AND ')}` : ''}
        ORDER BY id`,
       params,
@@ -152,7 +158,7 @@ app.get('/api/velos/:id/disponibilites', async (request, response, next) => {
       return response.status(400).json({ erreur: 'Vélo ou date invalide.' });
     }
 
-    const check = await pool.query('SELECT id FROM velos WHERE id = $1', [bikeId]);
+    const check = await pool.query('SELECT id, stock FROM velos WHERE id = $1', [bikeId]);
     if (!check.rowCount) {
       return response.status(404).json({ erreur: 'Ce vélo n’existe pas.' });
     }
@@ -162,23 +168,13 @@ app.get('/api/velos/:id/disponibilites', async (request, response, next) => {
        WHERE velo_id = $1 AND date_location = $2::date AND statut = 'confirmee'`,
       [bikeId, date],
     );
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const currentHour = now.getHours();
-    const slots = Array.from({ length: 9 }, (_, index) => {
-      const start = 9 + index;
-      const end = start + 1;
-      const heure = `${String(start).padStart(2, '0')}:00`;
-      const past = date < today || (date === today && start <= currentHour);
-      const reserved = reservations.rows.some((reservation) => {
-        const reservationStart = Number(String(reservation.heure_debut).slice(0, 2));
-        const reservationEnd = Number(String(reservation.heure_fin).slice(0, 2));
-        return start < reservationEnd && end > reservationStart;
-      });
-      return { heure, disponible: !past && !reserved };
-    });
+    const slots = buildAvailabilitySlots(
+      check.rows[0].stock,
+      reservations.rows,
+      date,
+    );
 
-    return response.json({ date, slots });
+    return response.json({ date, stock: check.rows[0].stock, slots });
   } catch (error) {
     return next(error);
   }
@@ -315,22 +311,24 @@ app.post('/api/reservations', authenticatedUser, async (request, response, next)
 
   try {
     await client.query('BEGIN');
-    const bike = await client.query('SELECT id, tarif FROM velos WHERE id = $1 FOR UPDATE', [veloId]);
+    const bike = await client.query(
+      'SELECT id, tarif, stock FROM velos WHERE id = $1 FOR UPDATE',
+      [veloId],
+    );
     if (!bike.rowCount) {
       await client.query('ROLLBACK');
       return response.status(404).json({ erreur: 'Ce vélo n’existe pas.' });
     }
 
-    const overlap = await client.query(
-      `SELECT id FROM reservations
+    const reservations = await client.query(
+      `SELECT heure_debut, heure_fin FROM reservations
        WHERE velo_id = $1 AND date_location = $2::date AND statut = 'confirmee'
-         AND heure_debut < $4::time AND heure_fin > $3::time
-       LIMIT 1`,
+         AND heure_debut < $4::time AND heure_fin > $3::time`,
       [veloId, date, heureDebut, heureFin],
     );
-    if (overlap.rowCount) {
+    if (!hasCapacity(bike.rows[0].stock, reservations.rows, heureDebut, heureFin)) {
       await client.query('ROLLBACK');
-      return response.status(409).json({ erreur: 'Ce créneau vient d’être réservé. Choisissez un autre horaire.' });
+      return response.status(409).json({ erreur: 'Il ne reste plus de vélo disponible sur une partie de ce créneau. Choisissez un autre horaire.' });
     }
 
     const duration = Number(heureFin.slice(0, 2)) - Number(heureDebut.slice(0, 2));
