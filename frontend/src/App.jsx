@@ -27,8 +27,11 @@ const formatDate = (date) => {
 const formatPrice = (price) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(Number(price));
 
+const API_BASE = `${import.meta.env.BASE_URL}api`;
+
 async function api(path, options = {}) {
-  const response = await fetch(path, {
+  const apiPath = path.replace(/^\/api/, '');
+  const response = await fetch(`${API_BASE}${apiPath}`, {
     ...options,
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),

@@ -11,9 +11,24 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const SESSION_COOKIE = 'veloloc_session';
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const BASE_PATH = process.env.BASE_PATH || '/';
+const FRONTEND_DIST = path.join(__dirname, '..', 'frontend', 'dist');
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 4,
+});
 
 app.use(express.json({ limit: '10kb' }));
+
+app.get('/api/health', async (request, response, next) => {
+  try {
+    await pool.query('SELECT 1');
+    return response.json({ status: 'ok' });
+  } catch (error) {
+    console.error('Échec du contrôle de santé PostgreSQL :', error.message);
+    return response.status(503).json({ status: 'unavailable' });
+  }
+});
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
@@ -37,7 +52,7 @@ function setSessionCookie(response, token) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   response.setHeader(
     'Set-Cookie',
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_DURATION_MS / 1000}${secure}`,
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=${BASE_PATH}; Max-Age=${SESSION_DURATION_MS / 1000}${secure}`,
   );
 }
 
@@ -45,7 +60,7 @@ function clearSessionCookie(response) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
   response.setHeader(
     'Set-Cookie',
-    `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure}`,
+    `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=${BASE_PATH}; Max-Age=0${secure}`,
   );
 }
 
@@ -363,6 +378,17 @@ app.delete('/api/reservations/:id', authenticatedUser, async (request, response,
   }
 });
 
+app.use(express.static(FRONTEND_DIST, { index: false }));
+
+app.get(/.*/, (request, response, next) => {
+  if (request.path === '/api' || request.path.startsWith('/api/')) {
+    return next();
+  }
+  return response.sendFile(path.join(FRONTEND_DIST, 'index.html'), (error) => {
+    if (error) next(error);
+  });
+});
+
 app.use((error, request, response, next) => {
   console.error('Erreur API :', error);
   if (response.headersSent) {
@@ -380,8 +406,8 @@ app.use((error, request, response, next) => {
 async function start() {
   const schema = await fs.readFile(path.join(__dirname, 'schema.sql'), 'utf8');
   await pool.query(schema);
-  app.listen(PORT, () => {
-    console.log(`Serveur démarré sur http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Serveur démarré sur le port ${PORT}`);
   });
 }
 

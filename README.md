@@ -12,6 +12,7 @@ Application de démonstration de réservation de vélos réalisée avec React, E
 - Prévention des conflits de réservation côté serveur, y compris lorsque plusieurs demandes arrivent simultanément.
 - Calcul du prix au prorata d’un tarif journalier de neuf heures.
 - Espace personnel pour consulter et annuler ses réservations futures.
+- Route de santé `/api/health` et pool PostgreSQL limité à quatre connexions pour le déploiement.
 
 Le projet ne traite pas de paiement, de récupération de mot de passe ni de vérification d’adresse email. Il s’agit d’un projet pédagogique, pas d’un service prêt pour la production.
 
@@ -77,6 +78,22 @@ Les données sont échangées en JSON. Les erreurs sont renvoyées dans la propr
 | `DELETE` | `/api/reservations/:id` | Session | Annule une réservation future appartenant au compte |
 
 Les cookies de session sont HTTP-only et SameSite=Lax ; le flag Secure est activé en production. Les mots de passe ne sont jamais stockés en clair. Les requêtes SQL utilisent des paramètres. Les réservations concurrentes d’un même vélo sont sérialisées au moyen d’un verrou PostgreSQL sur la ligne du vélo avant de vérifier les chevauchements.
+
+## Déploiement IHME
+
+Le projet fournit un `Dockerfile` adapté aux dossiers `frontend/` et `backend/`, un contrôle de santé Docker, et les workflows GitHub Actions dans `.github/workflows/`. Chaque push sur `main` construit et publie l’image GHCR `ghcr.io/raphaelroumier-wq/mastereihme`; le déploiement sur le serveur du cours reste une action manuelle.
+
+Dans **Settings → Secrets and variables → Actions**, configurez les paramètres transmis dans votre dossier d’accès privé :
+
+- Secret `IHME_DEPLOY_TOKEN` : le jeton personnel de déploiement.
+- Variable `IHME_DEPLOY_URL` : l’URL complète `/__deploy/pNN` fournie pour votre espace.
+- Variable `IHME_BASE_PATH` : `/reservation-de-velos/`.
+
+Ne copiez jamais le jeton dans le dépôt, un commit, un journal ou un message. `.gitignore` et `.dockerignore` excluent les fichiers d’accès personnels.
+
+Après un push, vérifiez la réussite du workflow **Construire et publier l’image** dans l’onglet Actions. Pour publier réellement cette version sur le serveur, ouvrez ce workflow, sélectionnez **Run workflow**, cochez **Déployer cette version après construction**, puis lancez-le. Vérifiez ensuite l’application sur l’URL personnelle reçue par courriel et son API `/reservation-de-velos/api/health`.
+
+Le proxy du serveur retire le préfixe public avant de transmettre les requêtes à Express. Le frontend ajoute ce préfixe aux appels API grâce à `import.meta.env.BASE_URL`; Express écoute sur `0.0.0.0:3000`, sert le frontend compilé et expose l’API sans préfixe. Le serveur fournit `DATABASE_URL`; le pool est limité à quatre connexions.
 
 ## Base de données
 
