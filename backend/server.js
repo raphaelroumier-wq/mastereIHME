@@ -1,19 +1,31 @@
 
+require('dotenv').config();
+
 const express = require('express');
+const { Pool } = require('pg');
 
 const app = express();
 const PORT = 3000;
 
-// Liste temporaire de vélos pour tester notre API.
-const velos = [
-  { id: 1, nom: 'Vélo de ville', type: 'Ville', tarif: 12 },
-  { id: 2, nom: 'Vélo électrique', type: 'Électrique', tarif: 25 },
-  { id: 3, nom: 'VTT', type: 'Sport', tarif: 18 },
-];
+// Connexion à la base de données PostgreSQL.
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
-// Route permettant de récupérer la liste des vélos.
-app.get('/api/velos', (req, res) => {
-  res.json(velos);
+// Route qui récupère les vélos depuis PostgreSQL.
+app.get('/api/velos', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, nom, type, tarif FROM velos ORDER BY id'
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Erreur lors de la récupération des vélos :', error);
+    res.status(500).json({
+      erreur: 'Impossible de récupérer les vélos.',
+    });
+  }
 });
 
 // Démarrage du serveur.
